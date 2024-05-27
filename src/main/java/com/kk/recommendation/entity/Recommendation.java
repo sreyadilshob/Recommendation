@@ -1,5 +1,6 @@
 package com.kk.recommendation.entity;
 
+import java.time.LocalDate;
 import java.util.Date;
 
 import com.kk.recommendation.model.Stock;
@@ -17,16 +18,18 @@ public class Recommendation {
 	Long id;
 	Long stockId;
 	String callType;
-	Date startDate;
+	LocalDate startDate;
 	Long startPrice;
-	Date targetDate;
+	LocalDate targetDate;
 	Long targetPrice;
 	Long stopLossPrice;
 	String channel;
-	Date currDate;
+	Date updatedTime;
 	String status;
 	Double returnPercentage;
 	boolean isCompleted;
+	String completionReason;
+	LocalDate completionDate;
 	
 	@Transient
 	Stock stock;
@@ -55,24 +58,22 @@ public class Recommendation {
 		this.callType = callType;
 	}
 
-	public Date getStartDate() {
+	public LocalDate getStartDate() {
 		return startDate;
 	}
 
-	public void setStartDate(Date date) {
+	public void setStartDate(LocalDate date) {
 		this.startDate = date;
 	}
 
 
-	public Date getTargetDate() {
+	public LocalDate getTargetDate() {
 		return targetDate;
 	}
 
-	public void setTargetDate(Date targetDate) {
+	public void setTargetDate(LocalDate targetDate) {
 		this.targetDate = targetDate;
 	}
-
-
 
 	public String getChannel() {
 		return channel;
@@ -82,12 +83,12 @@ public class Recommendation {
 		this.channel = channel;
 	}
 
-	public Date getCurrDate() {
-		return currDate;
+	public Date getUpdatedTime() {
+		return updatedTime;
 	}
 
-	public void setCurrDate(Date currDate) {
-		this.currDate = currDate;
+	public void setUpdatedTime(Date updatedTime) {
+		this.updatedTime = updatedTime;
 	}
 
 	public String getStatus() {
@@ -146,5 +147,19 @@ public class Recommendation {
 		this.stock = stock;
 	}
 
+	public String getCompletionReason() {
+		return completionReason;
+	}
 
+	public void setCompletionReason(String completionReason) {
+		this.completionReason = completionReason;
+	}
+
+	public LocalDate getCompletionDate() {
+		return completionDate;
+	}
+
+	public void setCompletionDate(LocalDate completionDate) {
+		this.completionDate = completionDate;
+	}
 }

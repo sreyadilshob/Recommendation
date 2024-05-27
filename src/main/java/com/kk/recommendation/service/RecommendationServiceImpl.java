@@ -1,9 +1,12 @@
 package com.kk.recommendation.service;
 
 import java.text.ParseException;
-import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.util.Comparator;
 import java.util.Date;
 import java.util.List;
+import java.util.Optional;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -64,16 +67,14 @@ public class RecommendationServiceImpl implements RecommendationService {
 	@Override
 	public RecommendationModel saveRecommendation(RecommendationModel recModel) throws ParseException {
 
-		SimpleDateFormat dateFormat = new SimpleDateFormat("dd-MM-yyyy HH:mm:ss");
 		Recommendation recommendation = new Recommendation();
 		recommendation.setCallType(recModel.getCallType());
-		recommendation.setStartDate(dateFormat.parse(recModel.getStartDate() + " 00:00:00"));
+		recommendation.setStartDate(LocalDate.parse(recModel.getStartDate()));
 		recommendation.setStartPrice(recModel.getStartPrice());
-		recommendation.setTargetDate(dateFormat.parse(recModel.getTargetDate() + " 00:00:00"));
+		recommendation.setTargetDate(LocalDate.parse(recModel.getTargetDate()));
 		recommendation.setTargetPrice(recModel.getTargetPrice());
 		recommendation.setStopLossPrice(recModel.getStopLossPrice());
 		recommendation.setChannel(recModel.getChannel());
-		recommendation.setCurrDate(new Date());
 		recommendation.setCompleted(false);
 		// recommendation.setStatus(null); //hardcoded
 		// recommendation.setReturnPercentage(0L); //hardcopded
@@ -91,43 +92,98 @@ public class RecommendationServiceImpl implements RecommendationService {
 		return recomRepo.findByStatus(status);
 	}
 
+	@Override
+	public Recommendation validateRecommendationFromHistoryById(Long recomID) {
+		Optional<Recommendation> recomObj = recomRepo.findById(recomID);
+		if(recomObj.isPresent()) {
+			Recommendation recommendation = recomObj.get();
+			
+			System.out.println("Fetching Stock Details for stockID: "+recommendation.getStockId());
+			ResponseEntity<Stock> response = restTemplate.getForEntity(stockIdApiUrl, Stock.class, recommendation.getStockId());
+			if(response.getStatusCode().is2xxSuccessful()) {
+				Stock stock = response.getBody();
+				List<StockPrice> stockPrices = stock.getStockPrices();		
+				List<StockPrice> sortedPriceList = stockPrices.stream()
+					.filter(x -> recommendation.getStartDate().isBefore(x.getDate()) && 
+							(recommendation.getTargetDate().isAfter(x.getDate()) ||  recommendation.getTargetDate().isEqual(x.getDate())) )
+					.sorted(Comparator.comparing(StockPrice::getDate))
+					.collect(Collectors.toList());
+				
+				for(StockPrice price : sortedPriceList) {
+					System.out.println("Date:"+price.getDate()+" #Open:"+price.getOpen()+" #Close:"
+							+price.getClose()+" #High:"+price.getHigh()+" #Low:"+price.getLow());
+					
+					Double returnPerc = getReturnPercentage(recommendation.getStartPrice() ,price.getClose());
+					if(price.getHigh() >= recommendation.getTargetPrice()) {
+						updateRecomObject(recommendation, true, "PROFIT", returnPerc, "TARGET", price.getDate());
+						break;
+					}else if(price.getLow() <= recommendation.getStopLossPrice()) {
+						updateRecomObject(recommendation, true, "LOSS", returnPerc, "STOPLOSS", price.getDate());
+						break;
+					} else if(price.getDate().isEqual(recommendation.getTargetDate())) {
+						updateRecomObject(recommendation, true, price.getClose() < recommendation.getStartPrice() ? "LOSS" : "PROFIT"
+							, returnPerc, "DATE", price.getDate());
+						break;
+					} else if(price.getDate().isBefore(recommendation.getTargetDate())) {
+						updateRecomObject(recommendation, false, price.getClose() < recommendation.getStartPrice() ? "LOSS" : "PROFIT"
+							, returnPerc,"ACTIVE", price.getDate());
+					}
+					System.out.println("#Completed: "+recommendation.isCompleted()+" #Status: "
+							+recommendation.getStatus()+" #return: "+recommendation.getReturnPercentage());
+					recomRepo.save(recommendation);
+				}
+			}
+		}
+		return recomRepo.findById(recomID).get();
+	}
 
 	@Override
-	public void validateRecommendationData() {
+	public void validateRecommendationDataDaily() {
 		List<Recommendation> recomList = recomRepo.findByIsCompleted(false);
 		for(Recommendation recommendation : recomList) {
 			Long stockId = recommendation.getStockId();
+			System.out.println("Validating Recommendation for stockID: "+stockId);
 			ResponseEntity<Stock> response = restTemplate.getForEntity(stockIdApiUrl, Stock.class, stockId);
 			if(response.getStatusCode().is2xxSuccessful()) {
 				Stock stock = response.getBody();
-				List<StockPrice> stockPrices = stock.getStockPrices();			
-				for(StockPrice price : stockPrices) {
-					updateRecommendationData(recommendation, price);				
+				//List<StockPrice> stockPrices = stock.getStockPrices();		
+				Optional<StockPrice> latestPriceObj = stock.getStockPrices().stream().max(Comparator.comparing(StockPrice::getDate));
+				if(latestPriceObj.isPresent()) {
+					StockPrice latestPrice = latestPriceObj.get();
+					System.out.println("Latest Price fetched -> Date:"+latestPrice.getDate()+" #Open:"+latestPrice.getOpen()+" #Close:"
+							+latestPrice.getClose()+" #High:"+latestPrice.getHigh()+" #Low:"+latestPrice.getLow());
+					updateRecommendationData(recommendation, latestPrice);
 				}
+				recomRepo.save(recommendation);
 			}
 		}
 		
 	}
 	
 	private void updateRecommendationData(Recommendation recommendation, StockPrice price) {
-		if(recommendation.getTargetPrice() < price.getClose() || recommendation.getTargetPrice() < price.getHigh()) {
-			recommendation.setCompleted(true);
-			recommendation.setStatus("PROFIT");
-			recommendation.setReturnPercentage(getReturnPercentage(recommendation.getStartPrice() ,price.getClose()));
-		}else if(price.getClose() < recommendation.getStopLossPrice() || price.getLow() < recommendation.getStopLossPrice()) {
-			recommendation.setCompleted(true);
-			recommendation.setStatus("PROFIT");
-			recommendation.setReturnPercentage(getReturnPercentage(recommendation.getStartPrice() ,price.getClose()));
-		} else if(new Date().after(recommendation.getTargetDate())) {
-			recommendation.setCompleted(true);
-			recommendation.setReturnPercentage(getReturnPercentage(recommendation.getStartPrice() ,price.getClose()));
-			if(price.getClose() < recommendation.getStartPrice()) {
-				recommendation.setStatus("LOSS");
-			} else {
-				recommendation.setStatus("PROFIT");
-			}
+		
+		Double returnPerc = getReturnPercentage(recommendation.getStartPrice() ,price.getClose());
+		if(price.getHigh() >= recommendation.getTargetPrice()) {
+			updateRecomObject(recommendation, true, "PROFIT", returnPerc, "TARGET", price.getDate());
+		}else if(price.getLow() <= recommendation.getStopLossPrice()) {
+			updateRecomObject(recommendation, true, "LOSS", returnPerc, "STOPLOSS", price.getDate());
+		} else if(price.getDate().isEqual(recommendation.getTargetDate())) {
+			updateRecomObject(recommendation, true, price.getClose() < recommendation.getStartPrice() ? "LOSS" : "PROFIT", returnPerc
+					, "DATE", price.getDate());
+		} else if(price.getDate().isBefore(recommendation.getTargetDate())) {
+			updateRecomObject(recommendation, false, price.getClose() < recommendation.getStartPrice() ? "LOSS" : "PROFIT", returnPerc
+					, "ACTIVE", price.getDate());
 		}
 		
+	}
+
+	private void updateRecomObject(Recommendation recommendation, boolean completed, String status, Double returnPerc, String reason, LocalDate cDate) {
+		recommendation.setCompleted(completed);
+		recommendation.setStatus(status);
+		recommendation.setReturnPercentage(returnPerc);
+		recommendation.setCompletionDate(cDate);
+		recommendation.setCompletionReason(reason);
+		recommendation.setUpdatedTime(new Date());
 	}
 
 	public Double getReturnPercentage(Long startPrice, Double currentPrice) {

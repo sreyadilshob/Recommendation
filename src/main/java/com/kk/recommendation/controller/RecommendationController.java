@@ -49,5 +49,11 @@ public class RecommendationController {
 //	RecommendationModel saveAllRecommendation(@RequestBody RecommendationsModel model) throws ParseException {
 //		return rcomSvc.saveAllRecommendations(model);
 //	}
+	
+	@GetMapping("/validate/id/{recomId}")
+	Recommendation getRecommendationbyStatus(@PathVariable Long recomId) {
+		System.out.println("Starting to validate Recommendation: "+recomId);
+		return rcomSvc.validateRecommendationFromHistoryById(recomId);
+	}
 
 }

@@ -16,6 +16,8 @@ public interface RecommendationService {
 
 	List<Recommendation> getRecommendationBySymbol(String symbol);
 
-	void validateRecommendationData();
+	void validateRecommendationDataDaily();
+
+	Recommendation validateRecommendationFromHistoryById(Long recomID);
 
 }

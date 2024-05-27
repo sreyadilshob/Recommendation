@@ -12,10 +12,11 @@ public class SchedulerService {
 	@Autowired
 	RecommendationService recommendationService;
 
-	@Scheduled(cron = "0 0/1 * 1/1 * ?")
-	public void schedulerOnEvery5Minutes() {
+	//cron = "0 0/1 * 1/1 * ?"   5 min
+	@Scheduled(cron = "0 9 * * * ?")
+	public void schedulerForEveryDayAt9AM() {
 		System.out.println("Scheduler run ");
-		recommendationService.validateRecommendationData();
+		recommendationService.validateRecommendationDataDaily();
 
 	}
 
