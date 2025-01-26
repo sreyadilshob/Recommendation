@@ -14,7 +14,8 @@ public class SchedulerService {
 
 	//cron = "0 0/1 * 1/1 * ?"   5 min
 	//cron = "35 9 * * *"	Every Day 9:35 AM
-	@Scheduled(cron = "0 9 * * *")
+	//second, minute, hour, day of month, month, day(s) of week
+	@Scheduled(cron = "0 30 3 * * *")
 	public void schedulerForEveryDayAt9AM() {
 		System.out.println("Scheduler run ");
 		recommendationService.validateRecommendationDataDaily();
